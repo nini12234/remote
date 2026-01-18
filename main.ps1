@@ -14,7 +14,8 @@ $serviceName = "WebRemote"
 $servicePath = "$env:TEMP\web_remote.ps1"
 
 # Copy script to temp location
-Copy-Item $MyInvocation.MyCommand.Path $servicePath -Force
+$scriptPath = $MyInvocation.MyCommand.Path
+Copy-Item $scriptPath $servicePath -Force
 
 # Create Windows Service
 try {
