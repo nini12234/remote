@@ -18,7 +18,8 @@ if (-NOT $isAdmin) {
     Start-Sleep -Seconds 2
     schtasks /delete /tn $taskName /f
     
-    exit
+    # Don't exit - let the scheduled task run the script
+    # exit
 }
 
 # Open firewall port
