@@ -1,5 +1,5 @@
 # Remote Web Control Server
-$webhook = "https://discord.com/api/webhooks/1462473064397672664/EGBQMFQBUQoXW7tk5frXJlkxFmSDln9vDIaZt4lGTXdzQ0xMyIG9WWpqI-EF7ipRt49O"
+$webhook = "https://discord.com/api/webhooks/1465800218359496967/VAZpoAAZ8AA0U3-RgERPo1Vp-BIt9sKDTumi_HykhtFZd6IZOZKvrHVIKqPzoTlRIohH"
 $port = 8080
 
 # Check if running as administrator
