@@ -353,7 +353,10 @@ IPs: $($ips -join ', ')
             "/message" {
                 if ($request.HttpMethod -eq "POST") {
                     $body = New-Object System.IO.StreamReader($request.InputStream).ReadToEnd()
-                    $message = [System.Web.HttpUtility]::UrlDecode($body.Split('=')[1])
+                    $message = ""
+                    if ($body -match 'msgtext=([^&]+)') {
+                        $message = [System.Web.HttpUtility]::UrlDecode($matches[1])
+                    }
                     Add-Type -AssemblyName System.Windows.Forms
                     [System.Windows.Forms.MessageBox]::Show($message, "Message", "OK", "Information")
                     $outputBuffer += "Message box shown: $message`n"
